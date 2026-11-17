@@ -138,9 +138,9 @@ addEventListener("hashchange",()=>location.reload());
 /* ---------- Πελάτισσες ---------- */
 function customer(){
   const late=nowHM()>=HOURS[HOURS.length-1];
-  // Ημερομηνίες: από σήμερα μέχρι το τέλος του επόμενου μήνα (χωρίς Κυριακές)
+  // Ημερομηνίες: από σήμερα μέχρι το τέλος του επόμενου μήνα (όλες οι μέρες)
   const t0=new Date(),endD=new Date(t0.getFullYear(),t0.getMonth()+2,0,23,59,59);
-  const dates=[];for(let i=late?1:0;;i++){const x=new Date();x.setDate(x.getDate()+i);if(x>endD)break;if(x.getDay()!==0)dates.push(x)}
+  const dates=[];for(let i=late?1:0;;i++){const x=new Date();x.setDate(x.getDate()+i);if(x>endD)break;dates.push(x)}
   const MF=["Ιανουάριος","Φεβρουάριος","Μάρτιος","Απρίλιος","Μάιος","Ιούνιος","Ιούλιος","Αύγουστος","Σεπτέμβριος","Οκτώβριος","Νοέμβριος","Δεκέμβριος"];
   const months=[...new Set(dates.map(d=>d.getMonth()))];
   let selDay=iso(dates[0]),selMonth=dates[0].getMonth(),selHour=null,taken=new Set();
