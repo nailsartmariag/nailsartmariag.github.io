@@ -146,24 +146,25 @@ function customer(){
   let selDay=iso(dates[0]),selMonth=dates[0].getMonth(),selHour=null,taken=new Set();
   app.innerHTML=`<h2>Ημερομηνία</h2><div class="months" id="months"></div><div class="days" id="days"></div>
   <h2>Τεχνική</h2><p class="hint">Μπορείς να διαλέξεις περισσότερες από μία.</p><div class="techs" id="tech"></div>
-  <h2>Ώρα</h2><p class="hint" id="durInfo"></p><div class="slots" id="slots"></div>
+  <h2>Ώρα</h2><p class="hint" id="durInfo" hidden></p><div class="slots" id="slots"></div>
   <h2>Στοιχεία</h2>
   <label for="name">Ονοματεπώνυμο</label><input id="name" autocomplete="name">
   <label for="phone">Τηλέφωνο</label><input id="phone" type="tel" autocomplete="tel">
   <button class="go" id="go" disabled>Κλείσε το ραντεβού</button><div id="msg" aria-live="polite"></div>`;
   const dayOff=ds=>HOURS.every(h=>taken.has(ds+"_"+h)); // κλειστή ή γεμάτη μέρα
   const check=()=>$("go").disabled=!(selHour!==null&&$("name").value.trim()&&$("phone").value.trim()&&tech.minutes());
-  const fits=h=>{const dur=tech.minutes();if(!dur)return false;
+  const fits=h=>{const dur=tech.minutes()||30; // χωρίς τεχνική ελέγχει μόνο τη μισή ώρα
     if(selDay===iso(new Date())&&h<=nowHM())return false;
     const need=slotsFor(h,dur);return !!need&&!need.some(x=>taken.has(selDay+"_"+x))};
-  const tech=techChips($("tech"),()=>{if(selHour!==null&&!fits(selHour))selHour=null;renderSlots();check()});
+  const tech=techChips($("tech"),()=>{let moved=false;if(selHour!==null&&!fits(selHour)){selHour=null;moved=true}
+    $("durInfo").textContent="Η ώρα που είχες διαλέξει δεν χωράει για αυτές τις τεχνικές. Διάλεξε άλλη.";$("durInfo").hidden=!moved;renderSlots();check()});
   function renderSlots(){
     const dur=tech.minutes();
-    $("durInfo").textContent="Διάλεξε πρώτα τεχνική για να δεις τις ελεύθερες ώρες.";$("durInfo").hidden=!!dur;
+    
     $("slots").innerHTML="";
     HOURS.forEach(h=>{const b=document.createElement("button");b.className="slot";
       b.textContent=fmt(h);b.disabled=!fits(h);
-      b.setAttribute("aria-pressed",selHour===h);b.onclick=()=>{selHour=h;renderSlots();check()};$("slots").append(b)});
+      b.setAttribute("aria-pressed",selHour===h);b.onclick=()=>{selHour=h;$("durInfo").hidden=true;renderSlots();check()};$("slots").append(b)});
   }
   function render(){
     $("months").innerHTML="";
