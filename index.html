@@ -25,8 +25,8 @@ h2{font-size:1.6rem;margin:30px 0 12px;color:var(--ink)}
 .day small{display:block;color:var(--muted);font-size:.8rem}.day b{font-size:1.25rem;font-weight:600;display:block;line-height:1.3}
 .day[aria-pressed=true],.slot[aria-pressed=true]{background:var(--pink);border-color:var(--pink);color:var(--ink)}
 .day[aria-pressed=true] small{color:var(--ink)}
-.slots{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.slot{border:1.5px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:11px 0;font:inherit;font-weight:600;cursor:pointer}
+.slots{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 8px;scrollbar-width:none}
+.slot{flex:0 0 84px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:11px 0;font:inherit;font-weight:600;cursor:pointer}
 .slot:disabled{background:var(--taken);color:#b7a59b;text-decoration:line-through;cursor:not-allowed;border-color:transparent;font-weight:400}
 label{display:block;font-weight:500;margin:14px 0 6px;font-size:.95rem}
 input,select{width:100%;font:inherit;color:var(--ink);background:var(--surface);border:1.5px solid var(--line);border-radius:14px;padding:13px 14px;appearance:none}
@@ -48,6 +48,23 @@ input:focus,select:focus{border-color:var(--pink);outline:none;box-shadow:0 0 0 
 .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .chk{display:flex;align-items:center;gap:10px;font-weight:500;margin-top:14px}.chk input{width:20px;height:20px;appearance:auto;accent-color:var(--pink)}
 .row.blk b{color:var(--muted)}
+.techs{position:relative}
+.ddf{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;text-align:left;font:inherit;color:var(--muted);background:var(--surface);border:1.5px solid var(--line);border-radius:14px;padding:13px 16px;cursor:pointer}
+.ddf.has{color:var(--ink);border-color:var(--pink)}
+.ddf[aria-expanded=true]{border-color:var(--pink);box-shadow:0 0 0 3px #f8bbd080}
+.caret{flex:0 0 auto;border:5px solid transparent;border-top:6px solid var(--ink);margin-top:6px;transition:transform .15s}
+.ddf[aria-expanded=true] .caret{transform:rotate(180deg);margin-top:-6px}
+.ddl{margin-top:8px;background:var(--surface);border:1.5px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:0 10px 30px #f8bbd040}
+.ddl[hidden]{display:none}
+.tch{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);background:var(--surface);color:var(--ink);padding:14px 18px;font:400 1rem Commissioner,sans-serif;cursor:pointer}
+.tch:last-child{border-bottom:0}
+.tch[aria-pressed=true]{background:var(--pink);font-weight:600;border-bottom-color:#fff}
+.hint{margin:-4px 0 12px}
+.hint[hidden]{display:none}
+.months{display:flex;gap:6px;margin:0 0 12px}
+.mon{border:0;background:none;color:var(--muted);font:500 1rem Commissioner,sans-serif;padding:6px 2px;margin-right:14px;border-bottom:2px solid transparent;cursor:pointer}
+.mon[aria-pressed=true]{color:var(--ink);border-bottom-color:var(--rose)}
+.hint{color:var(--muted);font-weight:400;font-size:.85rem}
 </style>
 </head>
 <body>
@@ -61,9 +78,26 @@ input:focus,select:focus{border-color:var(--pink);outline:none;box-shadow:0 0 0 
 const SUPABASE_URL="https://mxthoghaznkgwnuaszib.supabase.co";
 const SUPABASE_KEY="sb_publishable_jkkAr7AfB4ETpQSxYYgvrQ_eXdE-0A2";
 // ==========================================================
-const TECH=["Απλό μανικιούρ","Ημιμόνιμο","Gel στο φυσικό νύχι","Τεχνητά νύχια (τζελ)","Acrylic","Nail art","Αφαίρεση ημιμόνιμου","Πεντικιούρ"];
-const HOURS=[10,11,12,13,14,15,16,17,18];
-const BLOCK="__BLOCK__";
+// Τεχνικές και διάρκεια σε λεπτά (αλλάζεις εδώ τα λεπτά)
+const TECH=[
+  {n:"Απλό μανικιούρ",m:30},
+  {n:"Ημιμόνιμο",m:60},
+  {n:"Gel στο φυσικό νύχι",m:90},
+  {n:"Τεχνητά νύχια (τζελ)",m:90},
+  {n:"Acrylic",m:120},
+  {n:"Nail art",m:30},
+  {n:"Αφαίρεση ημιμόνιμου",m:30},
+  {n:"Πεντικιούρ",m:60}];
+// Ώρες ραντεβού: από 09:00 έως 20:00 ανά μισή ώρα (αποθηκεύονται ως 900, 930, 1000...)
+const HOURS=[];for(let m=9*60;m<=20*60;m+=30)HOURS.push(Math.floor(m/60)*100+m%60);
+const norm=v=>v<24?v*100:v; // παλιά ραντεβού αποθηκεύτηκαν ως 10, 11...
+const toMin=v=>{v=norm(v);return Math.floor(v/100)*60+v%100},fromMin=m=>Math.floor(m/60)*100+m%60;
+const fmt=v=>{v=norm(v);return String(Math.floor(v/100)).padStart(2,"0")+":"+String(v%100).padStart(2,"0")};
+const nowHM=()=>{const n=new Date();return n.getHours()*100+n.getMinutes()};
+const durTxt=m=>m<60?m+" λεπτά":m===60?"1 ώρα":(m/60).toString().replace(".",",")+(m%60?" ώρα":" ώρες");
+// Ποιες μισές ώρες πιάνει ένα ραντεβού που ξεκινά στο start και κρατά dur λεπτά (null αν δεν χωράει)
+const slotsFor=(start,dur)=>{const i=HOURS.indexOf(norm(start)),n=Math.ceil(dur/30);return i<0||i+n>HOURS.length?null:HOURS.slice(i,i+n)};
+const BLOCK="__BLOCK__",CONT="__CONT__";
 const DN=["Κυρ","Δευ","Τρι","Τετ","Πεμ","Παρ","Σαβ"],MN=["Ιαν","Φεβ","Μαρ","Απρ","Μάι","Ιουν","Ιουλ","Αυγ","Σεπ","Οκτ","Νοε","Δεκ"];
 const $=id=>document.getElementById(id),app=$("app");
 const iso=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
@@ -72,43 +106,74 @@ async function rpc(fn,args){
   if(!r.ok)throw new Error(await r.text());
   const t=await r.text();return t?JSON.parse(t):null;
 }
+function techChips(el,onChange){
+  const sel=new Set();
+  el.innerHTML='<button type="button" class="ddf" aria-expanded="false"><span class="ddv"></span><i class="caret"></i></button><div class="ddl" hidden></div>';
+  const f=el.firstChild,v=f.firstChild,list=el.lastChild;
+  const show=()=>{const t=TECH.filter(t=>sel.has(t)).map(t=>t.n).join(" + ");v.textContent=t||"Διάλεξε τεχνική";f.classList.toggle("has",!!t)};
+  const open=o=>{list.hidden=!o;f.setAttribute("aria-expanded",o)};
+  f.onclick=()=>open(list.hidden);
+  document.addEventListener("click",e=>{if(!el.contains(e.target))open(false)});
+  TECH.forEach(t=>{const b=document.createElement("button");b.type="button";b.className="tch";b.textContent=t.n;b.setAttribute("aria-pressed","false");
+    b.onclick=()=>{sel.has(t)?sel.delete(t):sel.add(t);b.setAttribute("aria-pressed",sel.has(t));show();onChange&&onChange()};list.append(b)});
+  show();
+  return{value:()=>TECH.filter(t=>sel.has(t)).map(t=>t.n).join(" + "),
+    minutes:()=>TECH.filter(t=>sel.has(t)).reduce((a,t)=>a+t.m,0),
+    clear:()=>{sel.clear();list.querySelectorAll(".tch").forEach(b=>b.setAttribute("aria-pressed","false"));show();open(false);onChange&&onChange()}};
+}
 function say(t,k){const m=$("msg");m.innerHTML='<div class="msg '+k+'"></div>';m.firstChild.textContent=t}
 if(location.hash==="#admin")admin();else customer();
 addEventListener("hashchange",()=>location.reload());
 
 /* ---------- Πελάτισσες ---------- */
 function customer(){
-  const late=new Date().getHours()>=HOURS[HOURS.length-1];
-  const dates=[];for(let i=late?1:0;dates.length<21;i++){const x=new Date();x.setDate(x.getDate()+i);if(x.getDay()!==0)dates.push(x)}
-  let selDay=iso(dates[0]),selHour=null,taken=new Set();
-  app.innerHTML=`<h2>Διάλεξε μέρα</h2><div class="days" id="days"></div>
-  <h2>Διάλεξε ώρα</h2><div class="slots" id="slots"></div>
-  <h2>Τα στοιχεία σου</h2>
+  const late=nowHM()>=HOURS[HOURS.length-1];
+  // Ημερομηνίες: από σήμερα μέχρι το τέλος του επόμενου μήνα (χωρίς Κυριακές)
+  const t0=new Date(),endD=new Date(t0.getFullYear(),t0.getMonth()+2,0,23,59,59);
+  const dates=[];for(let i=late?1:0;;i++){const x=new Date();x.setDate(x.getDate()+i);if(x>endD)break;if(x.getDay()!==0)dates.push(x)}
+  const MF=["Ιανουάριος","Φεβρουάριος","Μάρτιος","Απρίλιος","Μάιος","Ιούνιος","Ιούλιος","Αύγουστος","Σεπτέμβριος","Οκτώβριος","Νοέμβριος","Δεκέμβριος"];
+  const months=[...new Set(dates.map(d=>d.getMonth()))];
+  let selDay=iso(dates[0]),selMonth=dates[0].getMonth(),selHour=null,taken=new Set();
+  app.innerHTML=`<h2>Ημερομηνία</h2><div class="months" id="months"></div><div class="days" id="days"></div>
+  <h2>Τεχνική</h2><p class="hint">Μπορείς να διαλέξεις περισσότερες από μία.</p><div class="techs" id="tech"></div>
+  <h2>Ώρα</h2><p class="hint" id="durInfo"></p><div class="slots" id="slots"></div>
+  <h2>Στοιχεία</h2>
   <label for="name">Ονοματεπώνυμο</label><input id="name" autocomplete="name">
   <label for="phone">Τηλέφωνο</label><input id="phone" type="tel" autocomplete="tel">
-  <label for="tech">Τεχνική</label><select id="tech">${TECH.map(t=>"<option>"+t+"</option>").join("")}</select>
   <button class="go" id="go" disabled>Κλείσε το ραντεβού</button><div id="msg" aria-live="polite"></div>`;
-  const check=()=>$("go").disabled=!(selHour!==null&&$("name").value.trim()&&$("phone").value.trim());
-  function render(){
-    $("days").innerHTML="";
-    dates.forEach(d=>{const b=document.createElement("button");b.className="day";b.setAttribute("aria-pressed",iso(d)===selDay);
-      b.innerHTML=`<small>${DN[d.getDay()]}</small><b>${d.getDate()}</b><small>${MN[d.getMonth()]}</small>`;
-      b.onclick=()=>{selDay=iso(d);selHour=null;render()};$("days").append(b)});
-    $("slots").innerHTML="";const now=new Date();
+  const check=()=>$("go").disabled=!(selHour!==null&&$("name").value.trim()&&$("phone").value.trim()&&tech.minutes());
+  const fits=h=>{const dur=tech.minutes();if(!dur)return false;
+    if(selDay===iso(new Date())&&h<=nowHM())return false;
+    const need=slotsFor(h,dur);return !!need&&!need.some(x=>taken.has(selDay+"_"+x))};
+  const tech=techChips($("tech"),()=>{if(selHour!==null&&!fits(selHour))selHour=null;renderSlots();check()});
+  function renderSlots(){
+    const dur=tech.minutes();
+    $("durInfo").textContent="Διάλεξε πρώτα τεχνική για να δεις τις ελεύθερες ώρες.";$("durInfo").hidden=!!dur;
+    $("slots").innerHTML="";
     HOURS.forEach(h=>{const b=document.createElement("button");b.className="slot";
-      b.textContent=String(h).padStart(2,"0")+":00";
-      b.disabled=(selDay===iso(now)&&h<=now.getHours())||taken.has(selDay+"_"+h);
-      b.setAttribute("aria-pressed",selHour===h);b.onclick=()=>{selHour=h;render()};$("slots").append(b)});
-    check();
+      b.textContent=fmt(h);b.disabled=!fits(h);
+      b.setAttribute("aria-pressed",selHour===h);b.onclick=()=>{selHour=h;renderSlots();check()};$("slots").append(b)});
   }
-  async function load(){try{const r=await rpc("get_taken",{from_day:iso(new Date())});taken=new Set(r.map(x=>x.day+"_"+x.hour));render()}catch(e){say("Δεν φορτώθηκαν οι διαθέσιμες ώρες. Δοκίμασε ξανά σε λίγο.","err")}}
+  function render(){
+    $("months").innerHTML="";
+    months.forEach(m=>{const b=document.createElement("button");b.className="mon";b.textContent=MF[m];b.setAttribute("aria-pressed",m===selMonth);
+      b.onclick=()=>{if(m===selMonth)return;selMonth=m;selDay=iso(dates.find(d=>d.getMonth()===m));selHour=null;render();$("days").scrollLeft=0;$("slots").scrollLeft=0};$("months").append(b)});
+    $("days").innerHTML="";
+    dates.filter(d=>d.getMonth()===selMonth).forEach(d=>{const b=document.createElement("button");b.className="day";b.setAttribute("aria-pressed",iso(d)===selDay);
+      b.innerHTML=`<small>${DN[d.getDay()]}</small><b>${d.getDate()}</b><small>${MN[d.getMonth()]}</small>`;
+      b.onclick=()=>{selDay=iso(d);selHour=null;render();$("slots").scrollLeft=0};$("days").append(b)});
+    renderSlots();check();
+  }
+  async function load(){try{const r=await rpc("get_taken",{from_day:iso(new Date())});taken=new Set(r.map(x=>x.day+"_"+norm(x.hour)));
+    if(selHour!==null&&!fits(selHour))selHour=null;const sl=$("slots").scrollLeft,dl=$("days").scrollLeft;render();$("slots").scrollLeft=sl;$("days").scrollLeft=dl}
+    catch(e){say("Δεν φορτώθηκαν οι διαθέσιμες ώρες. Δοκίμασε ξανά σε λίγο.","err")}}
   ["name","phone"].forEach(i=>$(i).addEventListener("input",check));
   $("go").onclick=async()=>{
-    $("go").disabled=true;
+    $("go").disabled=true;const dur=tech.minutes(),need=slotsFor(selHour,dur);
     try{
-      const ok=await rpc("book",{p_day:selDay,p_hour:selHour,p_name:$("name").value.trim(),p_phone:$("phone").value.trim(),p_tech:$("tech").value});
-      if(ok){const[y,m,d]=selDay.split("-");say(`Το ραντεβού σου κλείστηκε: ${d}/${m} στις ${String(selHour).padStart(2,"0")}:00 – ${$("tech").value}. Σε περιμένουμε!`,"ok");$("name").value="";$("phone").value=""}
-      else say("Η ώρα μόλις κλείστηκε από άλλη πελάτισσα. Διάλεξε άλλη.","err");
+      const ok=await rpc("book_multi",{p_day:selDay,p_hours:need,p_name:$("name").value.trim(),p_phone:$("phone").value.trim(),p_tech:tech.value()});
+      if(ok){const[y,m,d]=selDay.split("-");say(`Το ραντεβού σου κλείστηκε: ${d}/${m} στις ${fmt(selHour)} – ${tech.value()}. Σε περιμένουμε!`,"ok");$("name").value="";$("phone").value="";tech.clear()}
+      else say("Κάποια από αυτές τις ώρες μόλις κλείστηκε. Διάλεξε άλλη ώρα.","err");
     }catch(e){say("Δεν ήταν δυνατή η κράτηση. Δοκίμασε ξανά.","err")}
     selHour=null;load();
   };
@@ -122,37 +187,40 @@ function admin(){
   <details class="box"><summary>Προσθήκη ραντεβού</summary>
    <p class="sub">Για ραντεβού που κλείνεις από τηλέφωνο ή Instagram.</p>
    <div class="two"><div><label for="aDay">Ημερομηνία</label><input id="aDay" type="date"></div>
-   <div><label for="aHour">Ώρα</label><select id="aHour">${HOURS.map(h=>`<option value="${h}">${String(h).padStart(2,"0")}:00</option>`).join("")}</select></div></div>
+   <div><label for="aHour">Ώρα έναρξης</label><select id="aHour">${HOURS.map(h=>`<option value="${h}">${fmt(h)}</option>`).join("")}</select></div></div>
    <label for="aName">Όνομα πελάτισσας</label><input id="aName">
    <label for="aPhone">Τηλέφωνο (προαιρετικό)</label><input id="aPhone" type="tel">
-   <label for="aTech">Τεχνική</label><select id="aTech">${TECH.map(t=>"<option>"+t+"</option>").join("")}</select>
+   <label>Τεχνική</label><div class="techs" id="aTech"></div>
    <button class="go" id="aGo">Προσθήκη ραντεβού</button></details>
   <details class="box"><summary>Κλείσιμο ώρας ή μέρας</summary>
    <p class="sub">Για ρεπό, διάλειμμα ή αργία. Οι πελάτισσες θα βλέπουν την ώρα πιασμένη.</p>
    <div class="two"><div><label for="bDay">Ημερομηνία</label><input id="bDay" type="date"></div>
-   <div><label for="bHour">Ώρα</label><select id="bHour">${HOURS.map(h=>`<option value="${h}">${String(h).padStart(2,"0")}:00</option>`).join("")}</select></div></div>
+   <div><label for="bHour">Ώρα</label><select id="bHour">${HOURS.map(h=>`<option value="${h}">${fmt(h)}</option>`).join("")}</select></div></div>
    <label class="chk"><input id="bAll" type="checkbox"> Όλη τη μέρα</label>
    <button class="go" id="bGo">Κλείσιμο</button></details>
   </div><div id="login"><label for="pin">Κωδικός PIN</label><input id="pin" type="password" inputmode="numeric"><button class="go" id="in">Είσοδος</button></div><div id="msg"></div><div id="list"></div>`;
   const beep=()=>{try{const c=new AudioContext(),o=c.createOscillator();o.connect(c.destination);o.frequency.value=880;o.start();o.stop(c.currentTime+.25)}catch(e){}};
   async function load(){
     try{
-      const rows=await rpc("admin_list",{pin});sessionStorage.setItem("pin",pin);$("login").hidden=true;$("tools").hidden=false;
+      let rows=await rpc("admin_list",{pin});sessionStorage.setItem("pin",pin);$("login").hidden=true;$("tools").hidden=false;
+      rows=rows.filter(r=>!String(r.tech).startsWith(CONT));
       const ids=new Set(rows.map(r=>r.id));let fresh=new Set();
       if(seen){rows.forEach(r=>{if(!seen.has(r.id))fresh.add(r.id)});if(fresh.size)beep()}
       seen=ids;draw(rows,fresh);
     }catch(e){$("login").hidden=false;sessionStorage.removeItem("pin");say("Λάθος PIN ή πρόβλημα σύνδεσης.","err")}
   }
   function draw(rows,fresh){
+    rows=rows.slice().sort((a,b)=>a.day<b.day?-1:a.day>b.day?1:norm(a.hour)-norm(b.hour));
     const L=$("list");L.innerHTML=rows.length?"":'<p class="sub">Δεν υπάρχουν ραντεβού ακόμα.</p>';let last="";
     rows.forEach(r=>{
       if(r.day!==last){last=r.day;const[y,m,d]=r.day.split("-"),dt=new Date(y,m-1,d);const h=document.createElement("div");h.className="dh";h.textContent=`${DN[dt.getDay()]} ${d}/${m}`;L.append(h)}
       const row=document.createElement("div");row.className="row";
       const s=document.createElement("div");
-      if(r.tech===BLOCK){row.classList.add("blk");s.innerHTML="<b></b>";s.firstChild.textContent=String(r.hour).padStart(2,"0")+":00 · Κλειστό";
+      if(r.tech===BLOCK){row.classList.add("blk");s.innerHTML="<b></b>";s.firstChild.textContent=fmt(r.hour)+" · Κλειστό";
         const u=document.createElement("button");u.textContent="Άνοιγμα";
         u.onclick=async()=>{await rpc("admin_cancel",{pin,bid:r.id});load()};row.append(s,u);L.append(row);return}
-      s.innerHTML="<b></b><small></small>";s.firstChild.textContent=String(r.hour).padStart(2,"0")+":00 · "+r.name;
+      const dur=r.dur||30;
+      s.innerHTML="<b></b><small></small>";s.firstChild.textContent=fmt(r.hour)+"–"+fmt(fromMin(toMin(r.hour)+dur))+" · "+r.name;
       s.lastChild.textContent=r.tech;
       if(fresh.has(r.id)){const n=document.createElement("span");n.className="new";n.textContent="Νέο";s.firstChild.append(n)}
       if(r.phone){const call=document.createElement("a");call.href="tel:"+r.phone;call.textContent=r.phone;s.lastChild.append(" · ",call)}
@@ -162,12 +230,16 @@ function admin(){
   }
   $("in").onclick=()=>{pin=$("pin").value;$("msg").innerHTML="";load()};
   $("aDay").value=$("bDay").value=iso(new Date());
+  const aTech=techChips($("aTech"));
   $("bAll").onchange=()=>$("bHour").disabled=$("bAll").checked;
   $("aGo").onclick=async()=>{
-    const name=$("aName").value.trim();if(!$("aDay").value||!name){say("Συμπλήρωσε ημερομηνία και όνομα.","err");return}
-    try{const ok=await rpc("book",{p_day:$("aDay").value,p_hour:+$("aHour").value,p_name:name,p_phone:$("aPhone").value.trim(),p_tech:$("aTech").value});
-      if(ok){say("Το ραντεβού προστέθηκε.","ok");$("aName").value="";$("aPhone").value="";seen=null;load()}
-      else say("Αυτή η ώρα είναι ήδη πιασμένη.","err")}catch(e){say("Δεν ήταν δυνατή η προσθήκη. Δοκίμασε ξανά.","err")}
+    const name=$("aName").value.trim(),dur=aTech.minutes();
+    if(!$("aDay").value||!name||!dur){say("Συμπλήρωσε ημερομηνία, όνομα και τεχνική.","err");return}
+    const need=slotsFor(+$("aHour").value,dur);
+    if(!need){say("Το ραντεβού ("+durTxt(dur)+") δεν χωράει πριν το τέλος της ημέρας. Διάλεξε πιο νωρίς.","err");return}
+    try{const ok=await rpc("book_multi",{p_day:$("aDay").value,p_hours:need,p_name:name,p_phone:$("aPhone").value.trim(),p_tech:aTech.value()});
+      if(ok){say("Το ραντεβού προστέθηκε ("+fmt(need[0])+"–"+fmt(fromMin(toMin(need[0])+dur))+").","ok");$("aName").value="";$("aPhone").value="";aTech.clear();seen=null;load()}
+      else say("Κάποια από αυτές τις ώρες είναι ήδη πιασμένη.","err")}catch(e){say("Δεν ήταν δυνατή η προσθήκη. Δοκίμασε ξανά.","err")}
   };
   $("bGo").onclick=async()=>{
     if(!$("bDay").value){say("Διάλεξε ημερομηνία.","err");return}
