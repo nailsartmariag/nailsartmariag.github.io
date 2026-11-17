@@ -42,12 +42,22 @@ input:focus,select:focus{border-color:var(--pink);outline:none;box-shadow:0 0 0 
 .row button{border:1.5px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:6px 14px;font:inherit;cursor:pointer}
 .new{background:var(--pink);color:var(--ink);border-radius:999px;padding:1px 10px;font-size:.8rem;margin-left:6px}
 .dh{margin:24px 0 0;font-family:"Noto Serif Display",Georgia,serif;font-style:italic;font-size:1.2rem}
-.box{background:var(--surface);border:1.5px solid var(--line);border-radius:20px;padding:4px 16px 16px;margin-top:16px}
-.box summary{font-size:1.25rem;padding:12px 0;cursor:pointer}
+.box{background:var(--surface);border:1.5px solid var(--line);border-radius:20px;padding:4px 16px;margin-top:16px}
+.box[open]{padding-bottom:16px}
+.box summary{font-size:1.25rem;padding:12px 0;cursor:pointer;list-style:none;display:flex;align-items:center;gap:12px}
+.box summary::-webkit-details-marker{display:none}
+.box summary::before{content:"";flex:0 0 auto;border:6px solid transparent;border-left:9px solid var(--ink);border-right:0;transition:transform .15s}
+.box[open] summary::before{transform:rotate(90deg)}
+.adm-h{color:var(--ink);text-transform:uppercase;margin-top:28px}
+#list{margin-bottom:28px}
+#list .dh:first-child{margin-top:4px}
 .box .go{margin-top:16px}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .chk{display:flex;align-items:center;gap:10px;font-weight:500;margin-top:14px}.chk input{width:20px;height:20px;appearance:auto;accent-color:var(--pink)}
 .row.blk b{color:var(--muted)}
+.day.off{cursor:not-allowed;color:#b9a9b0;border-color:var(--line);background:linear-gradient(to top right,transparent calc(50% - 1.5px),var(--rose) calc(50% - 1.5px),var(--rose) calc(50% + 1.5px),transparent calc(50% + 1.5px)),var(--surface)}
+.day.off small{color:#c9b9c0}
+.off-tag{background:var(--pink);color:var(--ink);border-radius:999px;padding:1px 10px;font:500 .8rem Commissioner,sans-serif;margin-left:8px;vertical-align:middle}
 .techs{position:relative}
 .ddf{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;text-align:left;font:inherit;color:var(--muted);background:var(--surface);border:1.5px solid var(--line);border-radius:14px;padding:13px 16px;cursor:pointer}
 .ddf.has{color:var(--ink);border-color:var(--pink)}
@@ -141,6 +151,7 @@ function customer(){
   <label for="name">Ονοματεπώνυμο</label><input id="name" autocomplete="name">
   <label for="phone">Τηλέφωνο</label><input id="phone" type="tel" autocomplete="tel">
   <button class="go" id="go" disabled>Κλείσε το ραντεβού</button><div id="msg" aria-live="polite"></div>`;
+  const dayOff=ds=>HOURS.every(h=>taken.has(ds+"_"+h)); // κλειστή ή γεμάτη μέρα
   const check=()=>$("go").disabled=!(selHour!==null&&$("name").value.trim()&&$("phone").value.trim()&&tech.minutes());
   const fits=h=>{const dur=tech.minutes();if(!dur)return false;
     if(selDay===iso(new Date())&&h<=nowHM())return false;
@@ -159,7 +170,9 @@ function customer(){
     months.forEach(m=>{const b=document.createElement("button");b.className="mon";b.textContent=MF[m];b.setAttribute("aria-pressed",m===selMonth);
       b.onclick=()=>{if(m===selMonth)return;selMonth=m;selDay=iso(dates.find(d=>d.getMonth()===m));selHour=null;render();$("days").scrollLeft=0;$("slots").scrollLeft=0};$("months").append(b)});
     $("days").innerHTML="";
+    if(dayOff(selDay)){const alt=dates.find(d=>d.getMonth()===selMonth&&!dayOff(iso(d)))||dates.find(d=>!dayOff(iso(d)));if(alt){selDay=iso(alt);selMonth=alt.getMonth();selHour=null}}
     dates.filter(d=>d.getMonth()===selMonth).forEach(d=>{const b=document.createElement("button");b.className="day";b.setAttribute("aria-pressed",iso(d)===selDay);
+      if(dayOff(iso(d))){b.classList.add("off");b.disabled=true;b.setAttribute("aria-label",DN[d.getDay()]+" "+d.getDate()+" "+MN[d.getMonth()]+", κλειστό")}
       b.innerHTML=`<small>${DN[d.getDay()]}</small><b>${d.getDate()}</b><small>${MN[d.getMonth()]}</small>`;
       b.onclick=()=>{selDay=iso(d);selHour=null;render();$("slots").scrollLeft=0};$("days").append(b)});
     renderSlots();check();
@@ -183,7 +196,7 @@ function customer(){
 /* ---------- Διαχείριση (τεχνικός) ---------- */
 function admin(){
   let pin=sessionStorage.getItem("pin")||"",seen=null;
-  $("tag").textContent="Τα ραντεβού σου";$("tag").hidden=false;app.innerHTML=`<div id="tools" hidden>
+  app.innerHTML=`<div id="tools" hidden><h2 class="adm-h">Τα ραντεβού σου</h2><div id="list"></div>
   <details class="box"><summary>Προσθήκη ραντεβού</summary>
    <p class="sub">Για ραντεβού που κλείνεις από τηλέφωνο ή Instagram.</p>
    <div class="two"><div><label for="aDay">Ημερομηνία</label><input id="aDay" type="date"></div>
@@ -198,7 +211,7 @@ function admin(){
    <div><label for="bHour">Ώρα</label><select id="bHour">${HOURS.map(h=>`<option value="${h}">${fmt(h)}</option>`).join("")}</select></div></div>
    <label class="chk"><input id="bAll" type="checkbox"> Όλη τη μέρα</label>
    <button class="go" id="bGo">Κλείσιμο</button></details>
-  </div><div id="login"><label for="pin">Κωδικός PIN</label><input id="pin" type="password" inputmode="numeric"><button class="go" id="in">Είσοδος</button></div><div id="msg"></div><div id="list"></div>`;
+  </div><div id="login"><label for="pin">Κωδικός PIN</label><input id="pin" type="password" inputmode="numeric"><button class="go" id="in">Είσοδος</button></div><div id="msg"></div>`;
   const beep=()=>{try{const c=new AudioContext(),o=c.createOscillator();o.connect(c.destination);o.frequency.value=880;o.start();o.stop(c.currentTime+.25)}catch(e){}};
   async function load(){
     try{
@@ -211,27 +224,44 @@ function admin(){
   }
   function draw(rows,fresh){
     rows=rows.slice().sort((a,b)=>a.day<b.day?-1:a.day>b.day?1:norm(a.hour)-norm(b.hour));
-    const L=$("list");L.innerHTML=rows.length?"":'<p class="sub">Δεν υπάρχουν ραντεβού ακόμα.</p>';let last="";
-    rows.forEach(r=>{
-      if(r.day!==last){last=r.day;const[y,m,d]=r.day.split("-"),dt=new Date(y,m-1,d);const h=document.createElement("div");h.className="dh";h.textContent=`${DN[dt.getDay()]} ${d}/${m}`;L.append(h)}
-      const row=document.createElement("div");row.className="row";
-      const s=document.createElement("div");
-      if(r.tech===BLOCK){row.classList.add("blk");s.innerHTML="<b></b>";s.firstChild.textContent=fmt(r.hour)+" · Κλειστό";
-        const u=document.createElement("button");u.textContent="Άνοιγμα";
-        u.onclick=async()=>{await rpc("admin_cancel",{pin,bid:r.id});load()};row.append(s,u);L.append(row);return}
-      const dur=r.dur||30;
-      s.innerHTML="<b></b><small></small>";s.firstChild.textContent=fmt(r.hour)+"–"+fmt(fromMin(toMin(r.hour)+dur))+" · "+r.name;
-      s.lastChild.textContent=r.tech;
-      if(fresh.has(r.id)){const n=document.createElement("span");n.className="new";n.textContent="Νέο";s.firstChild.append(n)}
-      if(r.phone){const call=document.createElement("a");call.href="tel:"+r.phone;call.textContent=r.phone;s.lastChild.append(" · ",call)}
-      const c=document.createElement("button");c.textContent="Ακύρωση";
-      c.onclick=async()=>{if(confirm("Ακύρωση ραντεβού για "+r.name+";")){await rpc("admin_cancel",{pin,bid:r.id});load()}};
-      row.append(s,c);L.append(row)});
+    const L=$("list");L.innerHTML=rows.length?"":'<p class="sub">Δεν υπάρχουν ραντεβού ακόμα.</p>';
+    const days=[...new Set(rows.map(r=>r.day))];
+    const reopen=ids=>async()=>{for(const id of ids)await rpc("admin_cancel",{pin,bid:id});load()};
+    days.forEach(day=>{
+      const dr=rows.filter(r=>r.day===day),blocks=dr.filter(r=>r.tech===BLOCK);
+      const full=HOURS.every(h=>blocks.some(r=>norm(r.hour)===h));
+      const[y,m,d]=day.split("-"),dt=new Date(y,m-1,d);
+      const h=document.createElement("div");h.className="dh";h.textContent=`${DN[dt.getDay()]} ${d}/${m}`;
+      if(full){const t=document.createElement("span");t.className="off-tag";t.textContent="Κλειστό";h.append(t)}
+      L.append(h);
+      if(full){const row=document.createElement("div");row.className="row blk";const s=document.createElement("div");s.innerHTML="<b>Κλειστό όλη τη μέρα</b>";
+        const u=document.createElement("button");u.textContent="Άνοιγμα";u.onclick=reopen(blocks.map(r=>r.id));row.append(s,u);L.append(row);
+        dr.filter(r=>r.tech!==BLOCK).forEach(r=>appt(L,r,fresh));return}
+      // ενώνει συνεχόμενες κλειστές μισές ώρες σε ένα διάστημα
+      let grp=null;const items=[];
+      dr.forEach(r=>{if(r.tech===BLOCK){const i=HOURS.indexOf(norm(r.hour));
+          if(grp&&i===grp.last+1){grp.last=i;grp.ids.push(r.id)}else{grp={first:i,last:i,ids:[r.id],hour:norm(r.hour)};items.push(grp)}}
+        else{grp=null;items.push(r)}});
+      items.forEach(it=>{if(!it.ids)return appt(L,it,fresh);
+        const row=document.createElement("div");row.className="row blk";const s=document.createElement("div");s.innerHTML="<b></b>";
+        s.firstChild.textContent=fmt(HOURS[it.first])+"–"+fmt(fromMin(toMin(HOURS[it.last])+30))+" · Κλειστό";
+        const u=document.createElement("button");u.textContent="Άνοιγμα";u.onclick=reopen(it.ids);row.append(s,u);L.append(row)});
+    });
+  }
+  function appt(L,r,fresh){
+    const row=document.createElement("div");row.className="row";const s=document.createElement("div");const dur=r.dur||30;
+    s.innerHTML="<b></b><small></small>";s.firstChild.textContent=fmt(r.hour)+"–"+fmt(fromMin(toMin(r.hour)+dur))+" · "+r.name;
+    s.lastChild.textContent=r.tech;
+    if(fresh.has(r.id)){const n=document.createElement("span");n.className="new";n.textContent="Νέο";s.firstChild.append(n)}
+    if(r.phone){const call=document.createElement("a");call.href="tel:"+r.phone;call.textContent=r.phone;s.lastChild.append(" · ",call)}
+    const c=document.createElement("button");c.textContent="Ακύρωση";
+    c.onclick=async()=>{if(confirm("Ακύρωση ραντεβού για "+r.name+";")){await rpc("admin_cancel",{pin,bid:r.id});load()}};
+    row.append(s,c);L.append(row);
   }
   $("in").onclick=()=>{pin=$("pin").value;$("msg").innerHTML="";load()};
   $("aDay").value=$("bDay").value=iso(new Date());
   const aTech=techChips($("aTech"));
-  $("bAll").onchange=()=>$("bHour").disabled=$("bAll").checked;
+  $("bAll").onchange=()=>$("bHour").parentElement.hidden=$("bAll").checked;
   $("aGo").onclick=async()=>{
     const name=$("aName").value.trim(),dur=aTech.minutes();
     if(!$("aDay").value||!name||!dur){say("Συμπλήρωσε ημερομηνία, όνομα και τεχνική.","err");return}
