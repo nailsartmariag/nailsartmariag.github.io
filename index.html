@@ -6,6 +6,10 @@
 <title>NailsArt BY MARIAG – Κλείσε ραντεβού</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+Display:ital,wght@1,400;1,500&family=Commissioner:wght@400;500;600&display=swap" rel="stylesheet">
 <meta name="theme-color" content="#ffffff">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="NailsArt">
 <style>
 :root{--pink:#F8BBD0;--rose:#E7779F;--milk:#fff;--surface:#fff;--ink:#000;--muted:#6f6468;--line:#f6d5e1;--taken:#f6f3f4;--ok:#2f7a55;--err:#c2185b;color-scheme:light}
 *{box-sizing:border-box}
@@ -48,6 +52,8 @@ input:focus,select:focus{border-color:var(--pink);outline:none;box-shadow:0 0 0 
 .box summary::-webkit-details-marker{display:none}
 .box summary::before{content:"";flex:0 0 auto;border:6px solid transparent;border-left:9px solid var(--ink);border-right:0;transition:transform .15s}
 .box[open] summary::before{transform:rotate(90deg)}
+.go.ghost{background:var(--surface);border:1.5px solid var(--pink);margin-top:10px}
+.lnk{display:block;margin:22px auto 0;background:none;border:0;color:var(--muted);font:inherit;text-decoration:underline;cursor:pointer}
 .adm-h{color:var(--ink);text-transform:uppercase;margin-top:28px}
 #list{margin-bottom:28px}
 #list .dh:first-child{margin-top:4px}
@@ -87,6 +93,7 @@ input:focus,select:focus{border-color:var(--pink);outline:none;box-shadow:0 0 0 
 // ===== ΡΥΘΜΙΣΕΙΣ: βάλε εδώ τα στοιχεία από το Supabase =====
 const SUPABASE_URL="https://mxthoghaznkgwnuaszib.supabase.co";
 const SUPABASE_KEY="sb_publishable_jkkAr7AfB4ETpQSxYYgvrQ_eXdE-0A2";
+const VAPID_PUBLIC="BBP60lvhncWt_bFUMskiO9W0tfOvnr313F5sx_KoKDhdMuNcXXoAg8BVymzeZNi3rh4WkaJY_FjNUzdqbW-q6F0"; // για τις ειδοποιήσεις
 // ==========================================================
 // Τεχνικές και διάρκεια σε λεπτά (αλλάζεις εδώ τα λεπτά)
 const TECH=[
@@ -132,7 +139,7 @@ function techChips(el,onChange){
     clear:()=>{sel.clear();list.querySelectorAll(".tch").forEach(b=>b.setAttribute("aria-pressed","false"));show();open(false);onChange&&onChange()}};
 }
 function say(t,k){const m=$("msg");m.innerHTML='<div class="msg '+k+'"></div>';m.firstChild.textContent=t}
-if(location.hash==="#admin")admin();else customer();
+if(location.hash==="#admin"||/[?&]admin/.test(location.search))admin();else customer();
 addEventListener("hashchange",()=>location.reload());
 
 /* ---------- Πελάτισσες ---------- */
@@ -196,7 +203,10 @@ function customer(){
 
 /* ---------- Διαχείριση (τεχνικός) ---------- */
 function admin(){
-  let pin=sessionStorage.getItem("pin")||"",seen=null;
+  const getPin=()=>{try{return localStorage.getItem("pin")||sessionStorage.getItem("pin")||""}catch(e){return ""}};
+  const savePin=()=>{try{if($("remember").checked){localStorage.setItem("pin",pin)}else{sessionStorage.setItem("pin",pin);localStorage.removeItem("pin")}}catch(e){}};
+  const forgetPin=()=>{try{localStorage.removeItem("pin");sessionStorage.removeItem("pin")}catch(e){}};
+  let pin=getPin(),seen=null,nReady=false;
   app.innerHTML=`<div id="tools" hidden><h2 class="adm-h">Τα ραντεβού σου</h2><div id="list"></div>
   <details class="box"><summary>Προσθήκη ραντεβού</summary>
    <p class="sub">Για ραντεβού που κλείνεις από τηλέφωνο ή Instagram.</p>
@@ -212,16 +222,24 @@ function admin(){
    <div><label for="bHour">Ώρα</label><select id="bHour">${HOURS.map(h=>`<option value="${h}">${fmt(h)}</option>`).join("")}</select></div></div>
    <label class="chk"><input id="bAll" type="checkbox"> Όλη τη μέρα</label>
    <button class="go" id="bGo">Κλείσιμο</button></details>
-  </div><div id="login"><label for="pin">Κωδικός PIN</label><input id="pin" type="password" inputmode="numeric"><button class="go" id="in">Είσοδος</button></div><div id="msg"></div>`;
+  <details class="box" id="nBox"><summary>Ειδοποιήσεις</summary>
+   <p class="sub" id="nStat"></p>
+   <button class="go" id="nOn" hidden>Ενεργοποίηση ειδοποιήσεων</button>
+   <button class="go ghost" id="nTest" hidden>Δοκιμαστική ειδοποίηση</button></details>
+  <button class="lnk" id="out">Αποσύνδεση</button>
+  </div><div id="login"><label for="pin">Κωδικός PIN</label><input id="pin" type="password" inputmode="numeric">
+  <label class="chk"><input id="remember" type="checkbox"> Να με θυμάται σε αυτό το κινητό</label>
+  <button class="go" id="in">Είσοδος</button></div><div id="msg"></div>`;
+  try{$("remember").checked=!!localStorage.getItem("pin")}catch(e){}
   const beep=()=>{try{const c=new AudioContext(),o=c.createOscillator();o.connect(c.destination);o.frequency.value=880;o.start();o.stop(c.currentTime+.25)}catch(e){}};
   async function load(){
     try{
-      let rows=await rpc("admin_list",{pin});sessionStorage.setItem("pin",pin);$("login").hidden=true;$("tools").hidden=false;
+      let rows=await rpc("admin_list",{pin});savePin();$("login").hidden=true;$("tools").hidden=false;if(!nReady){nReady=true;nState(true)}
       rows=rows.filter(r=>!String(r.tech).startsWith(CONT));
       const ids=new Set(rows.map(r=>r.id));let fresh=new Set();
       if(seen){rows.forEach(r=>{if(!seen.has(r.id))fresh.add(r.id)});if(fresh.size)beep()}
       seen=ids;draw(rows,fresh);
-    }catch(e){$("login").hidden=false;sessionStorage.removeItem("pin");say("Λάθος PIN ή πρόβλημα σύνδεσης.","err")}
+    }catch(e){$("login").hidden=false;$("tools").hidden=true;forgetPin();say("Λάθος PIN ή πρόβλημα σύνδεσης.","err")}
   }
   function draw(rows,fresh){
     rows=rows.slice().sort((a,b)=>a.day<b.day?-1:a.day>b.day?1:norm(a.hour)-norm(b.hour));
@@ -279,6 +297,36 @@ function admin(){
       say(n?"Έκλεισαν "+n+(n===1?" ώρα.":" ώρες.")+(n<hrs.length?" Οι υπόλοιπες είχαν ήδη ραντεβού.":""):"Αυτές οι ώρες είναι ήδη πιασμένες.",n?"ok":"err");seen=null;load()}
     catch(e){say("Δεν ήταν δυνατό το κλείσιμο. Δοκίμασε ξανά.","err")}
   };
+  // ---- Ειδοποιήσεις ----
+  const isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+  const standalone=navigator.standalone||matchMedia("(display-mode: standalone)").matches;
+  const pushOK="serviceWorker" in navigator&&"PushManager" in window&&"Notification" in window;
+  const swReady="serviceWorker" in navigator?navigator.serviceWorker.register("sw.js").then(()=>navigator.serviceWorker.ready).catch(()=>null):Promise.resolve(null);
+  const keyBytes=s=>{s=s.replace(/-/g,"+").replace(/_/g,"/");while(s.length%4)s+="=";return Uint8Array.from(atob(s),c=>c.charCodeAt(0))};
+  async function nState(resave){
+    const st=$("nStat"),on=$("nOn"),test=$("nTest");on.hidden=test.hidden=true;
+    if(!pushOK){st.textContent=isIOS&&!standalone
+      ?"Για να σου έρχονται ειδοποιήσεις, πρόσθεσε πρώτα αυτή τη σελίδα στην οθόνη Αφετηρίας (Κοινοποίηση → Προσθήκη στην οθόνη Αφετηρίας) και άνοιξέ τη από το εικονίδιο NailsArt."
+      :"Αυτός ο browser δεν υποστηρίζει ειδοποιήσεις. Δοκίμασε από Safari (iPhone) ή Chrome (Android).";$("nBox").open=true;return}
+    if(Notification.permission==="denied"){st.textContent="Οι ειδοποιήσεις είναι κλειστές από τις ρυθμίσεις του κινητού. Άνοιξέ τες από Ρυθμίσεις → Ειδοποιήσεις → NailsArt.";return}
+    const reg=await swReady,sub=reg&&Notification.permission==="granted"?await reg.pushManager.getSubscription():null;
+    if(sub){st.textContent="Οι ειδοποιήσεις είναι ενεργές σε αυτό το κινητό ✓";test.hidden=false;
+      if(resave)rpc("save_push_sub",{pin,sub:sub.toJSON()}).catch(()=>{})}
+    else{st.textContent="Ενεργοποίησέ τες για να σου έρχεται ειδοποίηση σε κάθε νέο ραντεβού.";on.hidden=false;$("nBox").open=true}
+  }
+  $("nOn").onclick=async()=>{
+    try{
+      const perm=await Notification.requestPermission();
+      if(perm!=="granted"){nState();return}
+      const reg=await swReady;if(!reg)throw new Error("no sw");
+      const sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:keyBytes(VAPID_PUBLIC)});
+      await rpc("save_push_sub",{pin,sub:sub.toJSON()});
+      say("Οι ειδοποιήσεις ενεργοποιήθηκαν.","ok");nState();
+    }catch(e){say("Δεν ήταν δυνατή η ενεργοποίηση των ειδοποιήσεων. Δοκίμασε ξανά.","err")}
+  };
+  $("nTest").onclick=async()=>{try{await rpc("test_push",{pin});say("Στάλθηκε. Σε λίγα δευτερόλεπτα θα έρθει η ειδοποίηση.","ok")}catch(e){say("Δεν ήταν δυνατή η αποστολή. Δοκίμασε ξανά.","err")}};
+  $("out").onclick=()=>{forgetPin();location.reload()};
+  document.addEventListener("visibilitychange",()=>{if(!document.hidden&&pin)load()});
   if(pin)load();setInterval(()=>{if(pin)load()},15000);
 }
 </script>
